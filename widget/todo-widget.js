@@ -3,7 +3,7 @@
 // icon-color: blue; icon-glyph: check-square;
 
 // ==========================================
-// GH Todo - Scriptable Widget
+// Todo - Scriptable Widget
 // ==========================================
 
 const OWNER = "krs893";
@@ -238,7 +238,7 @@ async function fetchTodosWithCache(token) {
 function createTokenMissingWidget() {
   const widget = new ListWidget();
   widget.url = APP_URL;
-  widget.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
+  widget.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
   const text = widget.addText("Scriptableで一度実行してトークンを設定");
   text.font = Font.mediumSystemFont(13);
   text.textColor = Color.orange();
@@ -275,7 +275,7 @@ function populateLockScreenWidget(widget, family, activeTodos, todayStr, failed)
 
   // accessoryRectangular
   const header = widget.addText(
-    `GH Todo · 今日 ${focusTodos.length}件 / 全${activeTodos.length}件${
+    `Todo · 今日 ${focusTodos.length}件 / 全${activeTodos.length}件${
       failed ? " (!)" : ""
     }`
   );
@@ -319,7 +319,7 @@ function populateHomeScreenWidget(
   headerRow.layoutHorizontally();
   headerRow.centerAlignContent();
 
-  const titleText = headerRow.addText("GH Todo");
+  const titleText = headerRow.addText("Todo");
   titleText.font = Font.boldSystemFont(13);
   titleText.textColor = accentColor;
 
@@ -417,7 +417,7 @@ async function run() {
 
   const widget = new ListWidget();
   widget.url = APP_URL;
-  widget.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
+  widget.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
 
   const family = config.widgetFamily || "medium";
   if (

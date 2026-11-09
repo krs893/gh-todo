@@ -1,6 +1,6 @@
 {
-  "name": "GH Todo - 個人用タスク管理",
-  "short_name": "GH Todo",
+  "name": "Todo",
+  "short_name": "Todo",
   "description": "GitHub 非公開リポジトリで同期する個人用 Todo アプリ",
   "lang": "ja",
   "start_url": "./",

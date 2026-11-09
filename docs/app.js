@@ -1123,7 +1123,7 @@ function init() {
   if (isMonitorMode) {
     normalView.hidden = true;
     monitorView.hidden = false;
-    document.title = "GH Todo (モニター)";
+    document.title = "Todo (モニター)";
   } else {
     normalView.hidden = false;
     monitorView.hidden = true;
