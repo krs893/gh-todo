@@ -1,11 +1,11 @@
 // UI・状態管理・ポーリング・同期制御
 import {
   applyPending,
-  buildClearCompletedPending,
   compareTodos,
   formatDueLabel,
   formatLocalDate,
   getTodoGroup,
+  isActiveTodo,
   isOverdue,
   isToday,
   parseTagsInput,
@@ -326,6 +326,7 @@ function upsertTodo(todo) {
       today: Boolean(todo.today),
       due: todo.due || null,
       tags: Array.isArray(todo.tags) ? [...todo.tags] : [],
+      ...(todo.deletedAt ? { deletedAt: todo.deletedAt } : {}),
       updatedAt: new Date().toISOString(),
     },
   };
@@ -333,25 +334,17 @@ function upsertTodo(todo) {
   scheduleSave();
 }
 
-function deleteTodo(id) {
-  if (!id) return;
-  pending[id] = { type: "delete" };
-  if (editingTodoId === id) {
+/**
+ * 削除は画面から消すだけで、GitHub の todos.json には deletedAt を付けて残す。
+ * @param {object} todo
+ */
+function deleteTodo(todo) {
+  if (!todo?.id) return;
+  if (editingTodoId === todo.id) {
     editingTodoId = null;
     editingDraft = null;
   }
-  savePendingToStorage();
-  scheduleSave();
-}
-
-function clearCompletedTodos() {
-  const currentTodos = getEffectiveTodos();
-  const hasCompleted = currentTodos.some((t) => t.done);
-  if (!hasCompleted) return;
-
-  pending = buildClearCompletedPending(currentTodos, pending);
-  savePendingToStorage();
-  scheduleSave();
+  upsertTodo({ ...todo, deletedAt: new Date().toISOString() });
 }
 
 // --- UI 描画 ---
@@ -446,13 +439,10 @@ function renderNormalMode() {
   syncEditingDraftFromDOM();
 
   const todayStr = formatLocalDate();
-  const allTodos = getEffectiveTodos();
+  // 完了・削除したタスクは表示しない（GitHub 上には残る）
   const activeTodos = sortTodos(
-    allTodos.filter((t) => !t.done),
+    getEffectiveTodos().filter(isActiveTodo),
     todayStr
-  );
-  const completedTodos = [...allTodos.filter((t) => t.done)].sort((a, b) =>
-    String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
   );
 
   renderTagFilterBar(activeTodos);
@@ -511,22 +501,6 @@ function renderNormalMode() {
     }
   }
 
-  // 完了済み欄
-  const completedSection = document.getElementById("completed-section");
-  const completedCountEl = document.getElementById("completed-count");
-  const completedListEl = document.getElementById("completed-list");
-
-  if (completedTodos.length === 0) {
-    completedSection.hidden = true;
-    completedListEl.innerHTML = "";
-  } else {
-    completedSection.hidden = false;
-    completedCountEl.textContent = String(completedTodos.length);
-    completedListEl.innerHTML = "";
-    for (const todo of completedTodos) {
-      completedListEl.appendChild(createCompletedItemElement(todo, todayStr));
-    }
-  }
 }
 
 function renderTagFilterBar(activeTodos) {
@@ -693,7 +667,7 @@ function createTodoItemElement(todo, todayStr) {
   delBtn.textContent = "削除";
   delBtn.setAttribute("aria-label", `「${todo.title}」を削除`);
   delBtn.addEventListener("click", () => {
-    deleteTodo(todo.id);
+    deleteTodo(todo);
   });
 
   row.appendChild(checkbox);
@@ -778,7 +752,7 @@ function createTodoItemElement(todo, todayStr) {
     deleteInEditBtn.className = "btn-danger-outline";
     deleteInEditBtn.textContent = "削除";
     deleteInEditBtn.addEventListener("click", () => {
-      deleteTodo(todo.id);
+      deleteTodo(todo);
     });
 
     const rightBtns = document.createElement("div");
@@ -838,68 +812,6 @@ function createTodoItemElement(todo, todayStr) {
   return li;
 }
 
-function createCompletedItemElement(todo, todayStr) {
-  const li = document.createElement("li");
-  li.className = "todo-item";
-
-  const row = document.createElement("div");
-  row.className = "todo-row";
-
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.className = "todo-checkbox";
-  checkbox.checked = true;
-  checkbox.setAttribute("aria-label", `「${todo.title}」を未完了に戻す`);
-  checkbox.addEventListener("change", () => {
-    upsertTodo({ ...todo, done: false });
-  });
-
-  const main = document.createElement("div");
-  main.className = "todo-main";
-  const titleDiv = document.createElement("div");
-  titleDiv.className = "todo-title";
-  titleDiv.textContent = todo.title;
-  main.appendChild(titleDiv);
-
-  if (todo.due || (Array.isArray(todo.tags) && todo.tags.length > 0)) {
-    const meta = document.createElement("div");
-    meta.className = "todo-meta";
-    if (todo.due) {
-      const dueBadge = document.createElement("span");
-      dueBadge.className = "badge badge-due";
-      dueBadge.textContent = formatDueLabel(todo.due, todayStr);
-      meta.appendChild(dueBadge);
-    }
-    if (Array.isArray(todo.tags)) {
-      for (const tag of todo.tags) {
-        const tagBadge = document.createElement("span");
-        tagBadge.className = "badge badge-tag";
-        tagBadge.textContent = `#${tag}`;
-        meta.appendChild(tagBadge);
-      }
-    }
-    main.appendChild(meta);
-  }
-
-  main.addEventListener("click", () => {
-    upsertTodo({ ...todo, done: false });
-  });
-
-  const delBtn = document.createElement("button");
-  delBtn.type = "button";
-  delBtn.className = "todo-delete-btn";
-  delBtn.textContent = "削除";
-  delBtn.addEventListener("click", () => {
-    deleteTodo(todo.id);
-  });
-
-  row.appendChild(checkbox);
-  row.appendChild(main);
-  row.appendChild(delBtn);
-  li.appendChild(row);
-  return li;
-}
-
 // --- モニターモード描画 & Wake Lock ---
 
 function renderMonitorStatus() {
@@ -941,7 +853,7 @@ function renderMonitorMode() {
 
   const todayStr = formatLocalDate();
   const activeTodos = sortTodos(
-    getEffectiveTodos().filter((t) => !t.done),
+    getEffectiveTodos().filter(isActiveTodo),
     todayStr
   );
 
@@ -1266,13 +1178,6 @@ function init() {
     // 続けて入力できるようにフォーカスを戻す
     titleInput.focus();
   });
-
-  // イベントバインド: 完了済みをすべて消去
-  document
-    .getElementById("clear-completed-btn")
-    ?.addEventListener("click", () => {
-      clearCompletedTodos();
-    });
 
   // 起動時は cache を即表示
   render();

@@ -417,7 +417,7 @@ async function run() {
   const { todos, fetchedAt, failed } = await fetchTodosWithCache(token);
   const todayStr = formatLocalDate();
   const activeTodos = sortTodos(
-    todos.filter((t) => !t.done),
+    todos.filter((t) => !t.done && !t.deletedAt),
     todayStr
   );
 

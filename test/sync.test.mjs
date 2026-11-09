@@ -7,6 +7,7 @@ import {
   encodeBase64Utf8,
   formatDueLabel,
   formatLocalDate,
+  isActiveTodo,
   isOverdue,
   isToday,
   parseTagsInput,
@@ -491,5 +492,24 @@ describe("ローカル日付の今日判定・期限ラベル", () => {
 
   it("parseTagsInput はカンマや読点で分割し空白除去・重複排除する", () => {
     assert.deepEqual(parseTagsInput(" 大学, 課題、 大学 , "), ["大学", "課題"]);
+  });
+});
+
+describe("完了・削除したタスクの扱い", () => {
+  it("isActiveTodo は未完了かつ削除されていないものだけ true", () => {
+    assert.equal(isActiveTodo({ id: "a", done: false }), true);
+    assert.equal(isActiveTodo({ id: "b", done: true }), false);
+    assert.equal(isActiveTodo({ id: "c", done: false, deletedAt: "2026-11-09T00:00:00.000Z" }), false);
+  });
+
+  it("削除は deletedAt 付きの upsert として todos.json に残る", () => {
+    const base = [{ id: "a", title: "A", done: false, today: false, due: null, tags: [], updatedAt: "2026-11-01T00:00:00.000Z" }];
+    const pending = {
+      a: { type: "upsert", todo: { ...base[0], deletedAt: "2026-11-09T00:00:00.000Z", updatedAt: "2026-11-09T00:00:00.000Z" } },
+    };
+    const result = applyPending(base, pending);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].deletedAt, "2026-11-09T00:00:00.000Z");
+    assert.equal(result.filter(isActiveTodo).length, 0);
   });
 });

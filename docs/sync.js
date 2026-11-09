@@ -40,6 +40,16 @@ export function parseLocalDate(dateStr) {
 }
 
 /**
+ * 画面に出すタスクかどうか（未完了かつ削除されていない）。
+ * 完了・削除したタスクも GitHub の todos.json には残る。
+ * @param {object} todo
+ * @returns {boolean}
+ */
+export function isActiveTodo(todo) {
+  return Boolean(todo) && !todo.done && !todo.deletedAt;
+}
+
+/**
  * 期限が今日かどうか判定する。
  * @param {string | null | undefined} due
  * @param {string} [todayStr=formatLocalDate()]
