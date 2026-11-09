@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="GH Todo">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <title>GH Todo</title>
+</head>
+<body>
+  <!-- 通常モード（編集用） -->
+  <div id="normal-view" class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <h1 class="app-title">GH Todo</h1>
+        <div class="sync-status-wrap" aria-live="polite">
+          <span id="sync-status-badge" class="sync-badge">読み込み中…</span>
+          <button id="retry-sync-btn" type="button" class="btn-inline-retry" hidden>再試行</button>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a href="?mode=monitor" class="btn-ghost" title="常時表示用のモニターモードを開く">モニター表示</a>
+        <button id="open-settings-btn" type="button" class="btn-ghost" aria-label="設定を開く">設定</button>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <!-- 追加フォーム -->
+      <form id="add-todo-form" class="add-form" autocomplete="off">
+        <div class="add-form-primary">
+          <input
+            id="new-title"
+            name="title"
+            type="text"
+            class="input-title"
+            placeholder="新しいタスクを入力（Enterで追加）"
+            required
+            aria-label="タスクのタイトル"
+          >
+          <button type="submit" class="btn-primary">追加</button>
+        </div>
+        <div class="add-form-options">
+          <label class="checkbox-pill">
+            <input id="new-today" name="today" type="checkbox">
+            <span>今日やる</span>
+          </label>
+          <label class="field-inline">
+            <span class="field-label">期限</span>
+            <input id="new-due" name="due" type="date" class="input-date">
+          </label>
+          <label class="field-inline field-tags">
+            <span class="field-label">タグ</span>
+            <input
+              id="new-tags"
+              name="tags"
+              type="text"
+              class="input-tags"
+              placeholder="大学, 買い物"
+            >
+          </label>
+        </div>
+      </form>
+
+      <!-- タグ絞り込み -->
+      <div id="tag-filter-bar" class="tag-filter-bar" hidden aria-label="タグで絞り込み"></div>
+
+      <!-- 未完了タスク一覧 -->
+      <section class="todo-section" aria-label="未完了のタスク">
+        <ul id="todo-list" class="todo-list"></ul>
+        <p id="empty-state" class="empty-state" hidden>未完了のタスクはありません</p>
+      </section>
+
+      <!-- 完了済み折りたたみ欄 -->
+      <details id="completed-section" class="completed-section" hidden>
+        <summary class="completed-summary">
+          <span>完了済み (<span id="completed-count">0</span>件)</span>
+        </summary>
+        <div class="completed-body">
+          <div class="completed-toolbar">
+            <button id="clear-completed-btn" type="button" class="btn-danger-outline">
+              完了済みをすべて消去
+            </button>
+          </div>
+          <ul id="completed-list" class="todo-list completed-list"></ul>
+        </div>
+      </details>
+    </main>
+  </div>
+
+  <!-- モニターモード（閲覧専用: ?mode=monitor） -->
+  <div id="monitor-view" class="monitor-container" hidden>
+    <header class="monitor-header">
+      <div class="monitor-header-left">
+        <h1 id="monitor-date-heading" class="monitor-title">GH Todo</h1>
+      </div>
+      <div class="monitor-header-right">
+        <span id="monitor-stale-badge" class="monitor-stale-badge" hidden>古い内容</span>
+        <span id="monitor-sync-time" class="monitor-sync-time">未取得</span>
+        <a href="./" class="monitor-nav-link">通常表示</a>
+        <button id="monitor-settings-btn" type="button" class="monitor-nav-btn">設定</button>
+      </div>
+    </header>
+
+    <main class="monitor-main">
+      <section class="monitor-focus-section" aria-label="今日やる・今日が期限・期限切れ">
+        <div class="monitor-section-header">
+          <h2 class="monitor-section-title">今日やる / 今日が期限 / 期限切れ</h2>
+          <span id="monitor-focus-count" class="monitor-count-badge">0</span>
+        </div>
+        <ul id="monitor-focus-list" class="monitor-focus-list"></ul>
+        <p id="monitor-focus-empty" class="monitor-empty" hidden>今日やるタスク・期限切れはありません</p>
+      </section>
+
+      <section class="monitor-upcoming-section" aria-label="今後のタスク">
+        <div class="monitor-section-header">
+          <h2 class="monitor-section-title">今後・その他</h2>
+          <span id="monitor-upcoming-count" class="monitor-count-sub"></span>
+        </div>
+        <ul id="monitor-upcoming-list" class="monitor-upcoming-list"></ul>
+        <p id="monitor-upcoming-empty" class="monitor-empty-sub" hidden>今後のタスクはありません</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- 設定モーダル -->
+  <div id="settings-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="settings-modal-title" class="modal-title">GitHub 同期設定</h2>
+        <button id="close-settings-btn" type="button" class="btn-icon" aria-label="閉じる">✕</button>
+      </div>
+      <form id="settings-form" class="settings-form" autocomplete="off">
+        <label class="form-group">
+          <span class="form-label">Owner（GitHub ユーザー名）</span>
+          <input id="setting-owner" name="owner" type="text" required placeholder="octocat">
+        </label>
+        <label class="form-group">
+          <span class="form-label">Repo（データ用の非公開リポジトリ名）</span>
+          <input id="setting-repo" name="repo" type="text" required placeholder="my-todo-data">
+        </label>
+        <div class="form-row-2col">
+          <label class="form-group">
+            <span class="form-label">Path（既定: todos.json）</span>
+            <input id="setting-path" name="path" type="text" placeholder="todos.json" value="todos.json">
+          </label>
+          <label class="form-group">
+            <span class="form-label">Branch（既定: main）</span>
+            <input id="setting-branch" name="branch" type="text" placeholder="main" value="main">
+          </label>
+        </div>
+        <div class="form-group">
+          <span class="form-label">Fine-grained Personal Access Token</span>
+          <div class="token-input-group">
+            <input
+              id="setting-token"
+              name="token"
+              type="password"
+              required
+              placeholder="github_pat_..."
+              autocomplete="off"
+            >
+            <button id="toggle-token-btn" type="button" class="btn-ghost-sm">表示</button>
+          </div>
+          <span class="form-help">対象リポジトリの Contents: Read and write 権限が必要です。トークンはこの端末の localStorage に保存されます。</span>
+        </div>
+        <div class="modal-actions">
+          <button id="cancel-settings-btn" type="button" class="btn-ghost">キャンセル</button>
+          <button type="submit" class="btn-primary">保存して同期</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Service Worker 更新通知バナー -->
+  <div id="sw-update-banner" class="sw-update-banner" hidden role="status" aria-live="polite">
+    <span>更新があります</span>
+    <button id="sw-reload-btn" type="button" class="btn-reload">再読み込み</button>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
