@@ -8,8 +8,10 @@ import {
   getTodoGroup,
   isOverdue,
   isToday,
+  parseQuickInput,
   parseTagsInput,
   pruneResolvedPending,
+  quickDueDate,
   sortTodos,
 } from "./sync.js";
 import {
@@ -39,6 +41,16 @@ let pending = loadPending();
 let selectedTag = null;
 let editingTodoId = null;
 let editingDraft = null; // 編集中フィールドの一時保持
+let focusEditTitleOnRender = false; // 編集を開いた直後にタイトル欄へフォーカスする
+let undoToastTimer = null;
+
+const GROUP_LABELS = { 1: "期限切れ", 2: "今日", 3: "今後", 4: "期限なし" };
+const DUE_CHIPS = [
+  { kind: "today", label: "今日" },
+  { kind: "tomorrow", label: "明日" },
+  { kind: "weekend", label: "週末" },
+  { kind: "nextweek", label: "来週" },
+];
 
 let isSaving = false;
 let isFetching = false;
@@ -315,7 +327,7 @@ async function flushSave() {
 
 // --- タスク操作（pending の更新） ---
 
-function upsertTodo(todo) {
+function setPendingUpsert(todo) {
   pending[todo.id] = {
     type: "upsert",
     todo: {
@@ -328,8 +340,67 @@ function upsertTodo(todo) {
       updatedAt: new Date().toISOString(),
     },
   };
+}
+
+function upsertTodo(todo) {
+  setPendingUpsert(todo);
   savePendingToStorage();
   scheduleSave();
+}
+
+/**
+ * 完了・削除の前の状態に戻す（元のタスクを新しい updatedAt で書き戻す）。
+ * @param {Array<object>} originals
+ */
+function restoreTodos(originals) {
+  for (const todo of originals) {
+    setPendingUpsert(todo);
+  }
+  savePendingToStorage();
+  scheduleSave();
+}
+
+function hideUndoToast() {
+  const toast = document.getElementById("undo-toast");
+  if (toast) toast.hidden = true;
+  if (undoToastTimer) {
+    clearTimeout(undoToastTimer);
+    undoToastTimer = null;
+  }
+}
+
+/**
+ * 「元に戻す」付きの通知を6秒間表示する。
+ * @param {string} message
+ * @param {Array<object>} originals 操作前のタスク
+ */
+function showUndoToast(message, originals) {
+  const toast = document.getElementById("undo-toast");
+  const messageEl = document.getElementById("undo-toast-message");
+  const btn = document.getElementById("undo-toast-btn");
+  if (!toast || !messageEl || !btn) return;
+  messageEl.textContent = message;
+  btn.onclick = () => {
+    hideUndoToast();
+    restoreTodos(originals);
+  };
+  toast.hidden = false;
+  if (undoToastTimer) clearTimeout(undoToastTimer);
+  undoToastTimer = setTimeout(hideUndoToast, 6000);
+}
+
+function completeTodo(todo) {
+  if (editingTodoId === todo.id) {
+    editingTodoId = null;
+    editingDraft = null;
+  }
+  upsertTodo({ ...todo, done: true });
+  showUndoToast(`「${todo.title}」を完了にしました`, [todo]);
+}
+
+function deleteTodoWithUndo(todo) {
+  deleteTodo(todo.id);
+  showUndoToast(`「${todo.title}」を削除しました`, [todo]);
 }
 
 function deleteTodo(id) {
@@ -345,12 +416,99 @@ function deleteTodo(id) {
 
 function clearCompletedTodos() {
   const currentTodos = getEffectiveTodos();
-  const hasCompleted = currentTodos.some((t) => t.done);
-  if (!hasCompleted) return;
+  const completed = currentTodos.filter((t) => t.done);
+  if (completed.length === 0) return;
 
   pending = buildClearCompletedPending(currentTodos, pending);
   savePendingToStorage();
   scheduleSave();
+  showUndoToast(`完了済み ${completed.length}件を消去しました`, completed);
+}
+
+/**
+ * 期限のクイック指定ボタン（今日・明日・週末・来週・なし）を作る。
+ * 押した日付がすでに入っていれば外す。
+ * @param {HTMLInputElement} dueInput
+ * @returns {HTMLDivElement}
+ */
+function createDueChips(dueInput) {
+  const wrap = document.createElement("div");
+  wrap.className = "due-chips";
+  const buttons = [];
+
+  const refresh = () => {
+    const todayStr = formatLocalDate();
+    for (const { btn, kind } of buttons) {
+      btn.classList.toggle(
+        "is-active",
+        Boolean(dueInput.value) && dueInput.value === quickDueDate(kind, todayStr)
+      );
+    }
+  };
+
+  for (const { kind, label } of DUE_CHIPS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "due-chip";
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      const value = quickDueDate(kind, formatLocalDate());
+      dueInput.value = dueInput.value === value ? "" : value;
+      dueInput.dispatchEvent(new Event("input", { bubbles: true }));
+      refresh();
+    });
+    buttons.push({ btn, kind });
+    wrap.appendChild(btn);
+  }
+
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "due-chip due-chip-clear";
+  clearBtn.textContent = "なし";
+  clearBtn.setAttribute("aria-label", "期限を外す");
+  clearBtn.addEventListener("click", () => {
+    dueInput.value = "";
+    dueInput.dispatchEvent(new Event("input", { bubbles: true }));
+    refresh();
+  });
+  wrap.appendChild(clearBtn);
+
+  dueInput.addEventListener("input", refresh);
+  dueInput.addEventListener("change", refresh);
+  refresh();
+  return wrap;
+}
+
+/**
+ * 追加欄の入力内容から、何が設定されるかを下に表示する。
+ */
+function renderQuickPreview() {
+  const titleInput = document.getElementById("new-title");
+  const previewEl = document.getElementById("quick-preview");
+  if (!titleInput || !previewEl) return;
+
+  const text = titleInput.value.trim();
+  if (!text) {
+    previewEl.classList.remove("is-active");
+    previewEl.innerHTML =
+      '「明日」「金曜」「11/12」で期限、「#タグ」でタグ、「!」で今日やる。<span class="kbd-hint"><kbd>N</kbd> で入力欄へ</span>';
+    return;
+  }
+
+  const todayStr = formatLocalDate();
+  const parsed = parseQuickInput(text, todayStr);
+  const parts = [];
+  if (parsed.due) parts.push(`期限 ${formatDueLabel(parsed.due, todayStr)}`);
+  if (parsed.today) parts.push("今日やる");
+  for (const tag of parsed.tags) parts.push(`#${tag}`);
+
+  if (parts.length === 0) {
+    previewEl.classList.remove("is-active");
+    previewEl.textContent = "Enter で追加";
+    return;
+  }
+  previewEl.classList.add("is-active");
+  previewEl.textContent = `「${parsed.title}」 → ${parts.join(" ・ ")}`;
 }
 
 // --- UI 描画 ---
@@ -464,6 +622,18 @@ function renderNormalMode() {
 
   const listEl = document.getElementById("todo-list");
   const emptyEl = document.getElementById("empty-state");
+
+  // 編集中の入力欄は再描画で作り直されるので、フォーカスとカーソル位置を引き継ぐ
+  const active = document.activeElement;
+  const focusState =
+    active && listEl.contains(active) && active.name
+      ? {
+          name: active.name,
+          start: active.selectionStart ?? null,
+          end: active.selectionEnd ?? null,
+        }
+      : null;
+
   listEl.innerHTML = "";
 
   if (filteredActive.length === 0) {
@@ -473,8 +643,46 @@ function renderNormalMode() {
       : "未完了のタスクはありません";
   } else {
     emptyEl.hidden = true;
+    const groupCounts = {};
     for (const todo of filteredActive) {
+      const group = getTodoGroup(todo, todayStr);
+      groupCounts[group] = (groupCounts[group] || 0) + 1;
+    }
+    let currentGroup = null;
+    for (const todo of filteredActive) {
+      const group = getTodoGroup(todo, todayStr);
+      if (group !== currentGroup) {
+        currentGroup = group;
+        const header = document.createElement("li");
+        header.className = `todo-group-header group-${group}`;
+        header.textContent = GROUP_LABELS[group];
+        const count = document.createElement("span");
+        count.className = "todo-group-count";
+        count.textContent = String(groupCounts[group]);
+        header.appendChild(count);
+        listEl.appendChild(header);
+      }
       listEl.appendChild(createTodoItemElement(todo, todayStr));
+    }
+  }
+
+  const editTitle = listEl.querySelector('input[name="edit-title"]');
+  if (focusEditTitleOnRender && editTitle) {
+    focusEditTitleOnRender = false;
+    editTitle.focus();
+    const end = editTitle.value.length;
+    editTitle.setSelectionRange(end, end);
+  } else if (focusState) {
+    const target = listEl.querySelector(`[name="${CSS.escape(focusState.name)}"]`);
+    if (target) {
+      target.focus();
+      if (focusState.start !== null && typeof target.setSelectionRange === "function") {
+        try {
+          target.setSelectionRange(focusState.start, focusState.end);
+        } catch {
+          // date / checkbox は選択範囲を持たない
+        }
+      }
     }
   }
 
@@ -567,11 +775,7 @@ function createTodoItemElement(todo, todayStr) {
   checkbox.checked = Boolean(todo.done);
   checkbox.setAttribute("aria-label", `「${todo.title}」を完了にする`);
   checkbox.addEventListener("change", () => {
-    if (editingTodoId === todo.id) {
-      editingTodoId = null;
-      editingDraft = null;
-    }
-    upsertTodo({ ...todo, done: checkbox.checked });
+    completeTodo(todo);
   });
 
   // タイトル・バッジ領域（タップで編集開閉）
@@ -586,18 +790,12 @@ function createTodoItemElement(todo, todayStr) {
   titleDiv.textContent = todo.title;
   main.appendChild(titleDiv);
 
+  // 「今日やる」は右端の★で示すので、ここでは期限とタグだけ出す
   const hasBadges =
-    todo.today || todo.due || (Array.isArray(todo.tags) && todo.tags.length > 0);
+    todo.due || (Array.isArray(todo.tags) && todo.tags.length > 0);
   if (hasBadges) {
     const meta = document.createElement("div");
     meta.className = "todo-meta";
-
-    if (todo.today) {
-      const todayBadge = document.createElement("span");
-      todayBadge.className = "badge badge-today";
-      todayBadge.textContent = "今日やる";
-      meta.appendChild(todayBadge);
-    }
 
     if (todo.due) {
       const dueBadge = document.createElement("span");
@@ -640,6 +838,7 @@ function createTodoItemElement(todo, todayStr) {
         due: todo.due || "",
         tagsText: Array.isArray(todo.tags) ? todo.tags.join(", ") : "",
       };
+      focusEditTitleOnRender = true;
     }
     renderNormalMode();
   };
@@ -652,19 +851,22 @@ function createTodoItemElement(todo, todayStr) {
     }
   });
 
-  // 削除ボタン
-  const delBtn = document.createElement("button");
-  delBtn.type = "button";
-  delBtn.className = "todo-delete-btn";
-  delBtn.textContent = "削除";
-  delBtn.setAttribute("aria-label", `「${todo.title}」を削除`);
-  delBtn.addEventListener("click", () => {
-    deleteTodo(todo.id);
+  // 今日やるの切り替え（削除は編集欄から）
+  const starBtn = document.createElement("button");
+  starBtn.type = "button";
+  starBtn.className = `todo-star-btn${todo.today ? " is-on" : ""}`;
+  starBtn.textContent = todo.today ? "★" : "☆";
+  starBtn.setAttribute("aria-pressed", String(Boolean(todo.today)));
+  const starLabel = todo.today ? "今日やるを外す" : "今日やるにする";
+  starBtn.setAttribute("aria-label", `「${todo.title}」を${starLabel}`);
+  starBtn.title = starLabel;
+  starBtn.addEventListener("click", () => {
+    upsertTodo({ ...todo, today: !todo.today });
   });
 
   row.appendChild(checkbox);
   row.appendChild(main);
-  row.appendChild(delBtn);
+  row.appendChild(starBtn);
   li.appendChild(row);
 
   // インライン編集フォーム
@@ -705,8 +907,8 @@ function createTodoItemElement(todo, todayStr) {
     todayLabel.appendChild(todayInput);
     todayLabel.appendChild(todaySpan);
 
-    const dueLabel = document.createElement("label");
-    dueLabel.className = "field-inline";
+    const dueLabel = document.createElement("div");
+    dueLabel.className = "field-inline field-due";
     const dueSpan = document.createElement("span");
     dueSpan.className = "field-label";
     dueSpan.textContent = "期限";
@@ -715,8 +917,10 @@ function createTodoItemElement(todo, todayStr) {
     dueInput.name = "edit-due";
     dueInput.className = "input-date";
     dueInput.value = draft.due || "";
+    dueInput.setAttribute("aria-label", "期限");
     dueLabel.appendChild(dueSpan);
     dueLabel.appendChild(dueInput);
+    dueLabel.appendChild(createDueChips(dueInput));
 
     const tagsLabel = document.createElement("label");
     tagsLabel.className = "field-inline field-tags";
@@ -744,7 +948,7 @@ function createTodoItemElement(todo, todayStr) {
     deleteInEditBtn.className = "btn-danger-outline";
     deleteInEditBtn.textContent = "削除";
     deleteInEditBtn.addEventListener("click", () => {
-      deleteTodo(todo.id);
+      deleteTodoWithUndo(todo);
     });
 
     const rightBtns = document.createElement("div");
@@ -773,6 +977,15 @@ function createTodoItemElement(todo, todayStr) {
     editForm.appendChild(titleInput);
     editForm.appendChild(optionsRow);
     editForm.appendChild(actionsRow);
+
+    editForm.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        editingTodoId = null;
+        editingDraft = null;
+        renderNormalMode();
+      }
+    });
 
     editForm.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -838,16 +1051,13 @@ function createCompletedItemElement(todo, todayStr) {
     main.appendChild(meta);
   }
 
-  main.addEventListener("click", () => {
-    upsertTodo({ ...todo, done: false });
-  });
-
   const delBtn = document.createElement("button");
   delBtn.type = "button";
   delBtn.className = "todo-delete-btn";
   delBtn.textContent = "削除";
+  delBtn.setAttribute("aria-label", `「${todo.title}」を削除`);
   delBtn.addEventListener("click", () => {
-    deleteTodo(todo.id);
+    deleteTodoWithUndo(todo);
   });
 
   row.appendChild(checkbox);
@@ -1077,7 +1287,12 @@ function registerServiceWorker() {
     banner.hidden = false;
   };
 
+  // 初回インストール時の clients.claim() でも controllerchange が起きるため、
+  // 「再読み込み」を押したときだけ再読み込みする（入力中に勝手に読み込み直さない）
+  let reloadRequested = false;
+
   reloadBtn?.addEventListener("click", () => {
+    reloadRequested = true;
     if (waitingWorker) {
       waitingWorker.postMessage({ type: "SKIP_WAITING" });
     } else {
@@ -1086,7 +1301,7 @@ function registerServiceWorker() {
   });
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    window.location.reload();
+    if (reloadRequested) window.location.reload();
   });
 
   navigator.serviceWorker
@@ -1196,25 +1411,60 @@ function init() {
     const dueInput = document.getElementById("new-due");
     const tagsInput = document.getElementById("new-tags");
 
-    const title = titleInput.value.trim();
-    if (!title) return;
+    if (!titleInput.value.trim()) return;
+    const parsed = parseQuickInput(titleInput.value, formatLocalDate());
+    const tags = parseTagsInput(tagsInput.value);
+    for (const tag of parsed.tags) {
+      if (!tags.includes(tag)) tags.push(tag);
+    }
 
     const newTodo = {
       id: crypto.randomUUID(),
-      title,
+      title: parsed.title,
       done: false,
-      today: todayInput.checked,
-      due: dueInput.value || null,
-      tags: parseTagsInput(tagsInput.value),
+      today: todayInput.checked || parsed.today,
+      due: parsed.due || dueInput.value || null,
+      tags,
       updatedAt: new Date().toISOString(),
     };
 
     titleInput.value = "";
     todayInput.checked = false;
     dueInput.value = "";
+    dueInput.dispatchEvent(new Event("input"));
     tagsInput.value = "";
+    renderQuickPreview();
 
     upsertTodo(newTodo);
+    // 続けて入力できるようにフォーカスを戻す
+    titleInput.focus();
+  });
+
+  // 追加欄: 期限のクイック指定と入力内容のプレビュー
+  const newDueInput = document.getElementById("new-due");
+  const newDueChips = document.getElementById("new-due-chips");
+  if (newDueInput && newDueChips) {
+    newDueChips.replaceWith(createDueChips(newDueInput));
+  }
+  const newTitleInput = document.getElementById("new-title");
+  newTitleInput?.addEventListener("input", renderQuickPreview);
+  newTitleInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") newTitleInput.blur();
+  });
+
+  // キーボード操作: N または / で追加欄へ
+  document.addEventListener("keydown", (e) => {
+    if (isMonitorMode || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+    const target = e.target;
+    const typing =
+      target instanceof HTMLElement &&
+      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+    if (typing) return;
+    if (!document.getElementById("settings-modal")?.hidden) return;
+    if (e.key === "n" || e.key === "N" || e.key === "/") {
+      e.preventDefault();
+      newTitleInput?.focus();
+    }
   });
 
   // イベントバインド: 完了済みをすべて消去

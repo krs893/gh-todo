@@ -887,3 +887,218 @@ input {
     align-items: flex-start;
   }
 }
+
+/* ===========================
+   操作性の改善
+=========================== */
+
+/* クイック入力のヒントとプレビュー */
+.quick-preview {
+  margin: 6px 2px 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  min-height: 1.2em;
+  overflow-wrap: anywhere;
+}
+
+.quick-preview.is-active {
+  color: var(--primary-soft-text);
+  font-weight: 600;
+}
+
+.quick-preview kbd {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-subtle);
+}
+
+/* 期限のクイック指定 */
+.field-due {
+  flex-wrap: wrap;
+}
+
+.due-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.due-chip {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.due-chip:hover {
+  color: var(--text);
+}
+
+.due-chip.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.due-chip-clear {
+  border-style: dashed;
+}
+
+/* 一覧のグループ見出し */
+.todo-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 2px -2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.todo-group-header:first-child {
+  margin-top: 0;
+}
+
+.todo-group-header.group-1 {
+  color: var(--danger);
+}
+
+.todo-group-header.group-2 {
+  color: var(--primary-soft-text);
+}
+
+.todo-group-count {
+  font-weight: 600;
+  font-size: 0.72rem;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+/* 今日やるの切り替え */
+.todo-star-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin: -6px -6px -6px 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.todo-star-btn:hover {
+  background: var(--surface-subtle);
+}
+
+.todo-star-btn.is-on {
+  color: var(--warning);
+}
+
+.todo-main:focus-visible,
+.todo-star-btn:focus-visible,
+.due-chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* 元に戻す */
+.undo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 16px;
+  border-radius: 12px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  font-size: 0.88rem;
+  z-index: 95;
+}
+
+.undo-toast-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.undo-toast-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* iPhone: ホームバーやノッチを避ける */
+.app-container {
+  padding-left: max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+
+.sw-update-banner {
+  bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+/* タッチ操作の端末: 入力欄を16px以上にして iPhone の自動ズームを防ぎ、押す場所を広げる */
+@media (pointer: coarse) {
+  .input-title,
+  .input-date,
+  .input-tags,
+  .settings-form input {
+    font-size: 16px;
+  }
+
+  .input-title {
+    padding: 10px 12px;
+  }
+
+  .todo-checkbox {
+    width: 22px;
+    height: 22px;
+    margin-top: 2px;
+  }
+
+  .todo-star-btn {
+    width: 44px;
+    height: 44px;
+    margin: -10px -10px -10px 0;
+  }
+
+  .due-chip {
+    padding: 6px 11px;
+  }
+
+  .kbd-hint {
+    display: none;
+  }
+
+  .todo-item {
+    padding: 12px;
+  }
+}

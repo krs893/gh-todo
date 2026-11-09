@@ -40,6 +40,134 @@ export function parseLocalDate(dateStr) {
 }
 
 /**
+ * YYYY-MM-DD に日数を足した日付を返す。
+ * @param {string} dateStr
+ * @param {number} days
+ * @returns {string}
+ */
+export function addDays(dateStr, days) {
+  const d = parseLocalDate(dateStr);
+  if (!d) return dateStr;
+  return formatLocalDate(
+    new Date(d.getFullYear(), d.getMonth(), d.getDate() + days)
+  );
+}
+
+/**
+ * 期限のクイック指定（今日・明日・週末・来週）を日付に変換する。
+ * - weekend: 今週の土曜（土曜当日はその日）
+ * - nextweek: 次の月曜
+ * @param {"today" | "tomorrow" | "weekend" | "nextweek"} kind
+ * @param {string} [todayStr=formatLocalDate()]
+ * @returns {string | null}
+ */
+export function quickDueDate(kind, todayStr = formatLocalDate()) {
+  const today = parseLocalDate(todayStr);
+  if (!today) return null;
+  const dow = today.getDay();
+  switch (kind) {
+    case "today":
+      return todayStr;
+    case "tomorrow":
+      return addDays(todayStr, 1);
+    case "weekend":
+      return addDays(todayStr, (6 - dow + 7) % 7);
+    case "nextweek":
+      return addDays(todayStr, (8 - dow) % 7 || 7);
+    default:
+      return null;
+  }
+}
+
+const WEEKDAY_INDEX = { 日: 0, 月: 1, 火: 2, 水: 3, 木: 4, 金: 5, 土: 6 };
+
+/**
+ * クイック入力の1語を期限として解釈する。解釈できなければ null。
+ * 今日 / 明日 / 明後日 / 週末 / 来週 / 金曜 / 11/12 / 11月12日
+ * @param {string} token
+ * @param {string} [todayStr=formatLocalDate()]
+ * @returns {string | null}
+ */
+export function parseDueToken(token, todayStr = formatLocalDate()) {
+  const t = String(token ?? "")
+    .trim()
+    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  if (t === "今日" || t === "きょう") return todayStr;
+  if (t === "明日" || t === "あした" || t === "あす") return addDays(todayStr, 1);
+  if (t === "明後日" || t === "あさって") return addDays(todayStr, 2);
+  if (t === "週末") return quickDueDate("weekend", todayStr);
+  if (t === "来週") return quickDueDate("nextweek", todayStr);
+
+  const weekday = /^([月火水木金土日])曜日?$/.exec(t);
+  if (weekday) {
+    const today = parseLocalDate(todayStr);
+    if (!today) return null;
+    const diff = (WEEKDAY_INDEX[weekday[1]] - today.getDay() + 7) % 7;
+    return addDays(todayStr, diff);
+  }
+
+  const monthDay = /^(\d{1,2})[/／月](\d{1,2})日?$/.exec(t);
+  if (monthDay) {
+    const today = parseLocalDate(todayStr);
+    if (!today) return null;
+    const mm = monthDay[1].padStart(2, "0");
+    const dd = monthDay[2].padStart(2, "0");
+    let candidate = `${today.getFullYear()}-${mm}-${dd}`;
+    if (!parseLocalDate(candidate)) return null;
+    // 60日より前に過ぎた日付は来年とみなす（直近なら今年の期限切れとして扱う）
+    const daysAgo = (today - parseLocalDate(candidate)) / 86400000;
+    if (daysAgo > 60) {
+      candidate = `${today.getFullYear() + 1}-${mm}-${dd}`;
+      if (!parseLocalDate(candidate)) return null;
+    }
+    return candidate;
+  }
+  return null;
+}
+
+/**
+ * タイトル欄のクイック入力を解釈する。空白区切りの語のうち
+ * 「#タグ」「!（今日やる）」「期限の語（最初の1つ）」を取り出し、残りをタイトルにする。
+ * タイトルが空になる場合は、入力全体をそのままタイトルとして扱う。
+ * @param {string} text
+ * @param {string} [todayStr=formatLocalDate()]
+ * @returns {{ title: string, tags: string[], due: string | null, today: boolean }}
+ */
+export function parseQuickInput(text, todayStr = formatLocalDate()) {
+  const raw = String(text ?? "").trim();
+  const tokens = raw.split(/[\s　]+/).filter(Boolean);
+  const titleParts = [];
+  const tags = [];
+  let due = null;
+  let today = false;
+
+  for (const token of tokens) {
+    const tag = /^[#＃](.+)$/.exec(token);
+    if (tag) {
+      if (!tags.includes(tag[1])) tags.push(tag[1]);
+      continue;
+    }
+    if (token === "!" || token === "！") {
+      today = true;
+      continue;
+    }
+    if (due === null) {
+      const parsedDue = parseDueToken(token, todayStr);
+      if (parsedDue) {
+        due = parsedDue;
+        continue;
+      }
+    }
+    titleParts.push(token);
+  }
+
+  if (titleParts.length === 0) {
+    return { title: raw, tags: [], due: null, today: false };
+  }
+  return { title: titleParts.join(" "), tags, due, today };
+}
+
+/**
  * 期限が今日かどうか判定する。
  * @param {string | null | undefined} due
  * @param {string} [todayStr=formatLocalDate()]

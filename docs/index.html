@@ -40,21 +40,27 @@
             name="title"
             type="text"
             class="input-title"
-            placeholder="新しいタスクを入力（Enterで追加）"
+            placeholder="例: レポート 明日 #大学 !"
             required
             aria-label="タスクのタイトル"
+            aria-describedby="quick-preview"
+            enterkeyhint="done"
           >
           <button type="submit" class="btn-primary">追加</button>
         </div>
+        <p id="quick-preview" class="quick-preview" aria-live="polite">
+          「明日」「金曜」「11/12」で期限、「#タグ」でタグ、「!」で今日やる。<span class="kbd-hint"><kbd>N</kbd> で入力欄へ</span>
+        </p>
         <div class="add-form-options">
           <label class="checkbox-pill">
             <input id="new-today" name="today" type="checkbox">
             <span>今日やる</span>
           </label>
-          <label class="field-inline">
-            <span class="field-label">期限</span>
+          <div class="field-inline field-due">
+            <label class="field-label" for="new-due">期限</label>
             <input id="new-due" name="due" type="date" class="input-date">
-          </label>
+            <div id="new-due-chips" class="due-chips"></div>
+          </div>
           <label class="field-inline field-tags">
             <span class="field-label">タグ</span>
             <input
@@ -176,6 +182,12 @@
         </div>
       </form>
     </div>
+  </div>
+
+  <!-- 元に戻す（完了・削除の直後に表示） -->
+  <div id="undo-toast" class="undo-toast" hidden role="status" aria-live="polite">
+    <span id="undo-toast-message" class="undo-toast-message"></span>
+    <button id="undo-toast-btn" type="button" class="undo-toast-btn">元に戻す</button>
   </div>
 
   <!-- Service Worker 更新通知バナー -->

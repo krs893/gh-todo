@@ -9,9 +9,12 @@ import {
   formatLocalDate,
   isOverdue,
   isToday,
+  parseDueToken,
+  parseQuickInput,
   parseTagsInput,
   parseTodosJson,
   pruneResolvedPending,
+  quickDueDate,
   serializeTodosJson,
   sortTodos,
 } from "../docs/sync.js";
@@ -491,5 +494,65 @@ describe("ローカル日付の今日判定・期限ラベル", () => {
 
   it("parseTagsInput はカンマや読点で分割し空白除去・重複排除する", () => {
     assert.deepEqual(parseTagsInput(" 大学, 課題、 大学 , "), ["大学", "課題"]);
+  });
+});
+
+describe("クイック入力", () => {
+  // 2026-11-09 は月曜
+  const today = "2026-11-09";
+
+  it("quickDueDate は今日・明日・週末（土曜）・来週（次の月曜）を返す", () => {
+    assert.equal(quickDueDate("today", today), "2026-11-09");
+    assert.equal(quickDueDate("tomorrow", today), "2026-11-10");
+    assert.equal(quickDueDate("weekend", today), "2026-11-14");
+    assert.equal(quickDueDate("nextweek", today), "2026-11-16");
+    assert.equal(quickDueDate("weekend", "2026-11-14"), "2026-11-14");
+    assert.equal(quickDueDate("nextweek", "2026-11-15"), "2026-11-16");
+    assert.equal(quickDueDate("tomorrow", "2026-12-31"), "2027-01-01");
+  });
+
+  it("parseDueToken は日本語の日付表現を解釈し、それ以外は null", () => {
+    assert.equal(parseDueToken("明日", today), "2026-11-10");
+    assert.equal(parseDueToken("あさって", today), "2026-11-11");
+    assert.equal(parseDueToken("金曜", today), "2026-11-13");
+    assert.equal(parseDueToken("月曜日", today), "2026-11-09");
+    assert.equal(parseDueToken("11/12", today), "2026-11-12");
+    assert.equal(parseDueToken("１２月３日", today), "2026-12-03");
+    assert.equal(parseDueToken("1/5", today), "2027-01-05", "過ぎた日付は来年");
+    assert.equal(parseDueToken("11/8", today), "2026-11-08", "直近の過去は今年の期限切れ");
+    assert.equal(parseDueToken("1/5", "2026-12-20"), "2027-01-05");
+    assert.equal(parseDueToken("2/30", today), null);
+    assert.equal(parseDueToken("レポート", today), null);
+    assert.equal(parseDueToken("明日の準備", today), null);
+  });
+
+  it("parseQuickInput はタグ・今日やる・期限を取り出し、残りをタイトルにする", () => {
+    assert.deepEqual(parseQuickInput("レポート 明日 #大学 !", today), {
+      title: "レポート",
+      tags: ["大学"],
+      due: "2026-11-10",
+      today: true,
+    });
+    assert.deepEqual(parseQuickInput("牛乳を買う　＃買い物　金曜", today), {
+      title: "牛乳を買う",
+      tags: ["買い物"],
+      due: "2026-11-13",
+      today: false,
+    });
+  });
+
+  it("期限の語は最初の1つだけ使い、2つ目以降はタイトルに残す", () => {
+    const parsed = parseQuickInput("明日 今日の振り返り", today);
+    assert.equal(parsed.due, "2026-11-10");
+    assert.equal(parsed.title, "今日の振り返り");
+  });
+
+  it("タイトルが空になるときは入力全体をタイトルにする", () => {
+    assert.deepEqual(parseQuickInput("明日", today), {
+      title: "明日",
+      tags: [],
+      due: null,
+      today: false,
+    });
   });
 });
