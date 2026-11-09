@@ -95,9 +95,8 @@ GitHub の **Settings → Developer settings → Personal access tokens → Fine
 ```
 
 - `~/Applications/Todo.app` に入り、起動します。Xcode（Swift）が必要です。App Store や開発者登録は不要で、期限もありません。
-- 初回はアイコンをクリックすると設定画面が出るので、PWA 用と同じトークン（Contents: Read and write）を入れます。トークンは Mac のキーチェーンに保存されます。
+- 初回はアイコンをクリックすると設定画面が出るので、PWA 用と同じトークン（Contents: Read and write）を入れます。トークンは `~/Library/Application Support/TodoBar/token` に本人だけが読める権限で保存されます。
 - 右下の「…」メニューから「ログイン時に起動」をオンにできます。
-- 作り直して入れ直したあとは、キーチェーンの使用許可を一度だけ聞かれます（「常に許可」を選びます）。
 - 内容は、開いたとき・5分ごと・スリープ復帰時に読み込み直します。
 
 ---

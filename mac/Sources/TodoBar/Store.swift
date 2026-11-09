@@ -50,7 +50,7 @@ final class Store: ObservableObject {
     }
 
     init() {
-        token = Keychain.readToken()
+        token = TokenStore.read()
         hasToken = token?.isEmpty == false
         loadState()
 
@@ -97,7 +97,7 @@ final class Store: ObservableObject {
         config = newConfig
         config.save()
         if let newToken, !newToken.isEmpty {
-            Keychain.saveToken(newToken)
+            TokenStore.save(newToken)
             token = newToken
             hasToken = true
         }

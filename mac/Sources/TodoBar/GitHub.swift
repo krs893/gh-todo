@@ -118,31 +118,48 @@ struct GitHubClient {
     }
 }
 
-/// トークンはこの Mac のキーチェーンに保存する
-enum Keychain {
-    private static let service = "io.github.krs893.todobar"
-    private static let account = "github-token"
-
-    private static var baseQuery: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: account]
+/// トークンは ~/Library/Application Support/TodoBar/token に、本人だけが読める権限（600）で保存する。
+/// キーチェーンだと、作り直すたびに署名が変わって使用許可のダイアログが出て、許可するまでアプリが止まるため。
+enum TokenStore {
+    private static var fileURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("TodoBar", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return dir.appendingPathComponent("token")
     }
 
-    static func readToken() -> String? {
-        var query = baseQuery
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
+    static func read() -> String? {
+        if let data = try? Data(contentsOf: fileURL),
+           let token = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !token.isEmpty {
+            return token
+        }
+        // 以前の版はキーチェーンに保存していたので、あれば一度だけ移す
+        if let token = readLegacyKeychain() {
+            save(token)
+            return token
+        }
+        return nil
+    }
+
+    static func save(_ token: String) {
+        let url = fileURL
+        FileManager.default.createFile(
+            atPath: url.path, contents: Data(token.utf8), attributes: [.posixPermissions: 0o600])
+    }
+
+    private static func readLegacyKeychain() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "io.github.krs893.todobar",
+            kSecAttrAccount as String: "github-token",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data else { return nil }
         return String(data: data, encoding: .utf8)
-    }
-
-    static func saveToken(_ token: String) {
-        SecItemDelete(baseQuery as CFDictionary)
-        var query = baseQuery
-        query[kSecValueData as String] = Data(token.utf8)
-        SecItemAdd(query as CFDictionary, nil)
     }
 }

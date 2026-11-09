@@ -1,29 +1,75 @@
 import AppKit
+import Combine
 import ServiceManagement
 import SwiftUI
 
 private let webAppURL = URL(string: "https://krs893.github.io/gh-todo/")!
 
+extension Notification.Name {
+    static let todoPopoverDidShow = Notification.Name("todoPopoverDidShow")
+}
+
 @main
 struct TodoBarApp: App {
-    @StateObject private var store = Store()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            ContentView()
-                .environmentObject(store)
-        } label: {
-            // 期限切れ・今日のタスクがあれば件数を出す
-            if store.focusCount > 0 {
-                HStack(spacing: 3) {
-                    Image(systemName: "checklist")
-                    Text("\(store.focusCount)")
-                }
-            } else {
-                Image(systemName: "checklist")
-            }
+        Settings { EmptyView() }
+    }
+}
+
+/// メニューバーのアイコンと、クリックで開く吹き出し（NSPopover）。
+/// MenuBarExtra のウィンドウは中身が小さくなっても縮まないため、
+/// 中身の大きさに合わせて伸び縮みする NSPopover を使う。
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var store: Store!
+    private var statusItem: NSStatusItem?
+    private let popover = NSPopover()
+    private var cancellables = Set<AnyCancellable>()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = item.button {
+            button.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: "Todo")
+            button.imagePosition = .imageLeading
+            button.target = self
+            button.action = #selector(togglePopover)
         }
-        .menuBarExtraStyle(.window)
+        statusItem = item
+
+        // アイコンを先に出してから読み込む（古い版からの移行で確認ダイアログが出ても、アイコンは見えるように）
+        store = Store()
+        let host = NSHostingController(rootView: ContentView().environmentObject(store))
+        host.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = host
+        popover.behavior = .transient
+
+        store.objectWillChange
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { self?.updateButton() }
+            }
+            .store(in: &cancellables)
+        updateButton()
+    }
+
+    /// 期限切れ・今日のタスクがあれば件数を出す
+    private func updateButton() {
+        let count = store.focusCount
+        statusItem?.button?.title = count > 0 ? "\(count)" : ""
+    }
+
+    @objc private func togglePopover() {
+        guard let button = statusItem?.button else { return }
+        if popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        store.refreshIfStale()
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+        NotificationCenter.default.post(name: .todoPopoverDidShow, object: nil)
     }
 }
 
@@ -118,9 +164,9 @@ struct MainView: View {
             .padding(.vertical, 8)
         }
         .onAppear { inputFocused = true }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-            inputFocused = true
-            store.refreshIfStale()
+        .onReceive(NotificationCenter.default.publisher(for: .todoPopoverDidShow)) { _ in
+            // 開くたびに入力欄へ（ウィンドウが前面になってから）
+            DispatchQueue.main.async { inputFocused = true }
         }
     }
 }
@@ -197,7 +243,7 @@ struct SettingsView: View {
                 labeled("ブランチ", TextField("main", text: $branch))
             }
             labeled("トークン", SecureField(store.hasToken ? "保存済み（変えるときだけ入力）" : "github_pat_…", text: $token))
-            Text("Contents: Read and write の権限が必要です。トークンはこの Mac のキーチェーンに保存されます。")
+            Text("Contents: Read and write の権限が必要です。トークンはこの Mac の中（本人だけが読めるファイル）に保存されます。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
