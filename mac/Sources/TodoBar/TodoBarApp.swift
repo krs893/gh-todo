@@ -5,10 +5,6 @@ import SwiftUI
 
 private let webAppURL = URL(string: "https://krs893.github.io/gh-todo/")!
 
-extension Notification.Name {
-    static let todoPopoverDidShow = Notification.Name("todoPopoverDidShow")
-}
-
 @main
 struct TodoBarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -69,7 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
-        NotificationCenter.default.post(name: .todoPopoverDidShow, object: nil)
     }
 }
 
@@ -92,25 +87,13 @@ struct ContentView: View {
 struct MainView: View {
     @EnvironmentObject private var store: Store
     let showSettings: () -> Void
-    @State private var newTitle = ""
-    @FocusState private var inputFocused: Bool
 
     private let rowHeight: CGFloat = 32
 
     var body: some View {
         let todos = store.visibleTodos
+        // タスクの追加は Web 版で行う
         VStack(spacing: 0) {
-            TextField("タスクを追加", text: $newTitle)
-                .textFieldStyle(.roundedBorder)
-                .focused($inputFocused)
-                .onSubmit {
-                    store.add(newTitle)
-                    newTitle = ""
-                }
-                .padding(12)
-
-            Divider()
-
             if todos.isEmpty {
                 Text("やることはありません")
                     .foregroundStyle(.secondary)
@@ -162,11 +145,6 @@ struct MainView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-        }
-        .onAppear { inputFocused = true }
-        .onReceive(NotificationCenter.default.publisher(for: .todoPopoverDidShow)) { _ in
-            // 開くたびに入力欄へ（ウィンドウが前面になってから）
-            DispatchQueue.main.async { inputFocused = true }
         }
     }
 }

@@ -88,7 +88,7 @@ GitHub の **Settings → Developer settings → Personal access tokens → Fine
 
 ## 6. Mac（メニューバー）でのセットアップ
 
-`mac/` にメニューバー専用アプリがあります。右上のアイコンから、やることの確認・追加・完了・削除ができます（期限やタグの編集は Web 版で行います）。期限切れと今日のタスクがあるときは、アイコンの横に件数が出ます。
+`mac/` にメニューバー専用アプリがあります。右上のアイコンから、やることの確認・完了・削除ができます（追加や期限・タグの編集は Web 版で行います）。期限切れと今日のタスクがあるときは、アイコンの横に件数が出ます。
 
 ```bash
 ./mac/build.sh --install
@@ -98,6 +98,16 @@ GitHub の **Settings → Developer settings → Personal access tokens → Fine
 - 初回はアイコンをクリックすると設定画面が出るので、PWA 用と同じトークン（Contents: Read and write）を入れます。トークンは `~/Library/Application Support/TodoBar/token` に本人だけが読める権限で保存されます。
 - 右下の「…」メニューから「ログイン時に起動」をオンにできます。
 - 内容は、開いたとき・5分ごと・スリープ復帰時に読み込み直します。
+
+---
+
+## 期限の通知（Discord）
+
+データ用リポジトリ（`gh-todo-data`）の GitHub Actions が、日本時間の 21・22・23 時に `todos.json` を確認します。期限が今日まで、または期限切れで、まだ終わっていないタスクがあれば Discord に通知します。なければ何も送りません。
+
+- 仕組み: `gh-todo-data` の `.github/workflows/notify-due.yml` と `.github/scripts/notify-due.mjs`
+- 送り先: シークレット `DISCORD_WEBHOOK_URL`（Webhook を作り直したら、ここを更新します）
+- GitHub の混雑で、数分〜数十分遅れることがあります。
 
 ---
 

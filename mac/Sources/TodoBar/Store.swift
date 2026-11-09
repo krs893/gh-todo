@@ -67,12 +67,6 @@ final class Store: ObservableObject {
 
     // MARK: - 操作
 
-    func add(_ rawTitle: String) {
-        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
-        setPending(Todo(id: UUID().uuidString.lowercased(), title: title, updatedAt: Clock.nowISO()))
-    }
-
     func complete(_ todo: Todo) {
         var updated = todo
         updated.done = true
