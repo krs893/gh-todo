@@ -6,11 +6,11 @@
 // GH Todo - Scriptable Widget
 // ==========================================
 
-const OWNER = "your-github-username";
-const REPO = "your-private-todo-repo";
+const OWNER = "krs893";
+const REPO = "gh-todo-data";
 const PATH = "todos.json";
 const BRANCH = "main";
-const APP_URL = "https://your-github-username.github.io/gh-todo/";
+const APP_URL = "https://krs893.github.io/gh-todo/";
 
 const TOKEN_KEY = "gh_todo_token";
 const CACHE_FILENAME = "gh-todo-widget-cache.json";
