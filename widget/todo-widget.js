@@ -103,6 +103,14 @@ function compareTodos(a, b, todayStr = formatLocalDate()) {
     return dueA < dueB ? -1 : 1;
   }
 
+  const timeA = a?.dueTime || null;
+  const timeB = b?.dueTime || null;
+  if (timeA !== timeB) {
+    if (timeA === null) return 1;
+    if (timeB === null) return -1;
+    return timeA < timeB ? -1 : 1;
+  }
+
   const updatedA = a?.updatedAt || "";
   const updatedB = b?.updatedAt || "";
   if (updatedA !== updatedB) {
@@ -290,7 +298,7 @@ function populateLockScreenWidget(widget, family, activeTodos, todayStr, failed)
   }
 
   for (const todo of activeTodos.slice(0, 2)) {
-    const dueLabel = formatDueLabel(todo.due, todayStr);
+    const dueLabel = formatDueLabel(todo.due, todayStr) + (todo.due && todo.dueTime ? ` ${todo.dueTime}` : "");
     const prefix = dueLabel ? `[${dueLabel}] ` : todo.today ? "[今日] " : "";
     const line = widget.addText(`• ${prefix}${todo.title}`);
     line.font = Font.systemFont(12);
@@ -368,7 +376,7 @@ function populateHomeScreenWidget(
 
       row.addSpacer(4);
 
-      const dueLabel = formatDueLabel(todo.due, todayStr);
+      const dueLabel = formatDueLabel(todo.due, todayStr) + (todo.due && todo.dueTime ? ` ${todo.dueTime}` : "");
       if (dueLabel) {
         const dueText = row.addText(dueLabel);
         dueText.font = Font.semiboldSystemFont(layout.dueFont);

@@ -13,7 +13,7 @@ final class TodoBarTests: XCTestCase {
     func testEncodeMatchesWebFormat() {
         let todos = [
             Todo(id: "a", title: "レポート \"下書き\" a/b", done: false, today: true, due: "2026-11-12",
-                 tags: ["大学", "課題"], updatedAt: "2026-11-09T02:14:58.242Z"),
+                 dueTime: "15:30", tags: ["大学", "課題"], updatedAt: "2026-11-09T02:14:58.242Z"),
             Todo(id: "b", title: "牛乳", done: true, today: false, due: nil, tags: [],
                  updatedAt: "2026-11-09T03:00:00.000Z", deletedAt: "2026-11-09T03:00:00.000Z"),
         ]
@@ -26,6 +26,7 @@ final class TodoBarTests: XCTestCase {
               "done": false,
               "today": true,
               "due": "2026-11-12",
+              "dueTime": "15:30",
               "tags": [
                 "大学",
                 "課題"
@@ -98,5 +99,8 @@ final class TodoBarTests: XCTestCase {
         XCTAssertEqual(TodoLogic.dueLabel(todo("a", due: "2026-11-08"), today: today), "期限切れ 11/8(日)")
         XCTAssertEqual(TodoLogic.dueLabel(todo("a", due: "2027-01-05"), today: today), "2027/1/5(火)")
         XCTAssertNil(TodoLogic.dueLabel(todo("a"), today: today))
+        var timed = todo("a", due: "2026-11-10")
+        timed.dueTime = "15:00"
+        XCTAssertEqual(TodoLogic.dueLabel(timed, today: today), "明日 15:00")
     }
 }

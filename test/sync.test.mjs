@@ -6,6 +6,7 @@ import {
   decodeBase64Utf8,
   encodeBase64Utf8,
   formatDueLabel,
+  formatDueWithTime,
   formatLocalDate,
   isActiveTodo,
   isOverdue,
@@ -511,5 +512,22 @@ describe("完了・削除したタスクの扱い", () => {
     assert.equal(result.length, 1);
     assert.equal(result[0].deletedAt, "2026-11-09T00:00:00.000Z");
     assert.equal(result.filter(isActiveTodo).length, 0);
+  });
+});
+
+describe("期限の時刻", () => {
+  it("formatDueWithTime は時刻があれば日付の後ろに付ける", () => {
+    assert.equal(formatDueWithTime({ due: "2026-11-10", dueTime: "15:00" }, "2026-11-09"), "明日 15:00");
+    assert.equal(formatDueWithTime({ due: "2026-11-10" }, "2026-11-09"), "明日");
+    assert.equal(formatDueWithTime({ due: null, dueTime: "15:00" }, "2026-11-09"), "");
+  });
+
+  it("同じ日の期限は時刻の早い順、時刻なしは後", () => {
+    const todos = [
+      { id: "none", due: "2026-11-12", updatedAt: "" },
+      { id: "late", due: "2026-11-12", dueTime: "18:00", updatedAt: "" },
+      { id: "early", due: "2026-11-12", dueTime: "09:00", updatedAt: "" },
+    ];
+    assert.deepEqual(sortTodos(todos, "2026-11-09").map((t) => t.id), ["early", "late", "none"]);
   });
 });

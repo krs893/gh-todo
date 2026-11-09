@@ -2,7 +2,7 @@
 import {
   applyPending,
   compareTodos,
-  formatDueLabel,
+  formatDueWithTime,
   formatLocalDate,
   getTodoGroup,
   isActiveTodo,
@@ -325,6 +325,8 @@ function upsertTodo(todo) {
       done: Boolean(todo.done),
       today: Boolean(todo.today),
       due: todo.due || null,
+      // 時刻は期限の日があるときだけ持つ（無ければ項目ごと書かない）
+      ...(todo.due && todo.dueTime ? { dueTime: todo.dueTime } : {}),
       tags: Array.isArray(todo.tags) ? [...todo.tags] : [],
       ...(todo.deletedAt ? { deletedAt: todo.deletedAt } : {}),
       updatedAt: new Date().toISOString(),
@@ -422,6 +424,7 @@ function syncEditingDraftFromDOM() {
   const titleInput = form.querySelector('input[name="edit-title"]');
   const todayInput = form.querySelector('input[name="edit-today"]');
   const dueInput = form.querySelector('input[name="edit-due"]');
+  const dueTimeInput = form.querySelector('input[name="edit-due-time"]');
   const tagsInput = form.querySelector('input[name="edit-tags"]');
   if (titleInput && todayInput && dueInput && tagsInput) {
     editingDraft = {
@@ -429,6 +432,7 @@ function syncEditingDraftFromDOM() {
       title: titleInput.value,
       today: todayInput.checked,
       due: dueInput.value || null,
+      dueTime: dueTimeInput?.value || "",
       tagsText: tagsInput.value,
     };
   }
@@ -609,7 +613,7 @@ function createTodoItemElement(todo, todayStr) {
     if (todo.due) {
       const dueBadge = document.createElement("span");
       dueBadge.className = "badge badge-due";
-      const label = formatDueLabel(todo.due, todayStr);
+      const label = formatDueWithTime(todo, todayStr);
       if (overdue) {
         dueBadge.classList.add("is-overdue");
         dueBadge.textContent = `期限切れ ${label}`;
@@ -645,6 +649,7 @@ function createTodoItemElement(todo, todayStr) {
         title: todo.title,
         today: Boolean(todo.today),
         due: todo.due || "",
+        dueTime: todo.dueTime || "",
         tagsText: Array.isArray(todo.tags) ? todo.tags.join(", ") : "",
       };
       focusEditTitleOnRender = true;
@@ -685,6 +690,7 @@ function createTodoItemElement(todo, todayStr) {
             title: todo.title,
             today: Boolean(todo.today),
             due: todo.due || "",
+            dueTime: todo.dueTime || "",
             tagsText: Array.isArray(todo.tags) ? todo.tags.join(", ") : "",
           };
 
@@ -723,8 +729,15 @@ function createTodoItemElement(todo, todayStr) {
     dueInput.name = "edit-due";
     dueInput.className = "input-date";
     dueInput.value = draft.due || "";
+    const dueTimeInput = document.createElement("input");
+    dueTimeInput.type = "time";
+    dueTimeInput.name = "edit-due-time";
+    dueTimeInput.className = "input-date";
+    dueTimeInput.setAttribute("aria-label", "期限の時刻（任意）");
+    dueTimeInput.value = draft.dueTime || "";
     dueLabel.appendChild(dueSpan);
     dueLabel.appendChild(dueInput);
+    dueLabel.appendChild(dueTimeInput);
 
     const tagsLabel = document.createElement("label");
     tagsLabel.className = "field-inline field-tags";
@@ -802,6 +815,7 @@ function createTodoItemElement(todo, todayStr) {
         title: newTitle,
         today: todayInput.checked,
         due: dueInput.value || null,
+        dueTime: dueTimeInput.value || null,
         tags: parseTagsInput(tagsInput.value),
       });
     });
@@ -891,7 +905,7 @@ function renderMonitorMode() {
 
       if (todo.due) {
         const dueSpan = document.createElement("span");
-        const label = formatDueLabel(todo.due, todayStr);
+        const label = formatDueWithTime(todo, todayStr);
         if (overdue) {
           dueSpan.className = "monitor-badge is-overdue";
           dueSpan.textContent = `期限切れ ${label}`;
@@ -952,7 +966,7 @@ function renderMonitorMode() {
       rightSpan.className = "monitor-upcoming-due";
       const parts = [];
       if (todo.due) {
-        parts.push(formatDueLabel(todo.due, todayStr));
+        parts.push(formatDueWithTime(todo, todayStr));
       } else {
         parts.push("期限なし");
       }
@@ -1154,6 +1168,7 @@ function init() {
     const titleInput = document.getElementById("new-title");
     const todayInput = document.getElementById("new-today");
     const dueInput = document.getElementById("new-due");
+    const dueTimeInput = document.getElementById("new-due-time");
     const tagsInput = document.getElementById("new-tags");
 
     const title = titleInput.value.trim();
@@ -1165,6 +1180,7 @@ function init() {
       done: false,
       today: todayInput.checked,
       due: dueInput.value || null,
+      dueTime: dueTimeInput.value || null,
       tags: parseTagsInput(tagsInput.value),
       updatedAt: new Date().toISOString(),
     };
@@ -1172,6 +1188,7 @@ function init() {
     titleInput.value = "";
     todayInput.checked = false;
     dueInput.value = "";
+    dueTimeInput.value = "";
     tagsInput.value = "";
 
     upsertTodo(newTodo);

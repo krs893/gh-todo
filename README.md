@@ -103,10 +103,12 @@ GitHub の **Settings → Developer settings → Personal access tokens → Fine
 
 ## 期限の通知（Discord）
 
-データ用リポジトリ（`gh-todo-data`）の GitHub Actions が、日本時間の 21・22・23 時に `todos.json` を確認します。期限が今日まで、または期限切れで、まだ終わっていないタスクがあれば Discord に通知します。なければ何も送りません。
+データ用リポジトリ（`gh-todo-data`）の GitHub Actions が毎時ちょうどに `todos.json` を確認し、終わっていない期限付きタスクを Discord に通知します（本人をメンション）。通知するものがなければ何も送りません。
 
+- 期限に時刻があるタスク: 2時間前・1時間前・期限の時刻の3回。毎時ちょうどに確認するので、15:30 のような時刻は 13・14・15時に届きます。
+- 時刻がないタスクと、時刻を過ぎても終わっていないタスク: 期限の日以降の 21・22・23時。
 - 仕組み: `gh-todo-data` の `.github/workflows/notify-due.yml` と `.github/scripts/notify-due.mjs`
-- 送り先: シークレット `DISCORD_WEBHOOK_URL`（Webhook を作り直したら、ここを更新します）
+- 送り先: シークレット `DISCORD_WEBHOOK_URL`、メンションする相手: 変数 `DISCORD_USER_ID`
 - GitHub の混雑で、数分〜数十分遅れることがあります。
 
 ---

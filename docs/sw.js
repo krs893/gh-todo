@@ -2,7 +2,7 @@
 // 同一オリジンのアプリ本体ファイルのみ network-first でキャッシュし、
 // api.github.com へのリクエストには一切触らない。
 
-const CACHE_NAME = "gh-todo-v5";
+const CACHE_NAME = "gh-todo-v6";
 const APP_ASSETS = [
   "./",
   "./index.html",

@@ -106,6 +106,17 @@ export function formatDueLabel(due, todayStr = formatLocalDate()) {
 }
 
 /**
+ * 期限を時刻つきで表示用に整形する（例: 「今日 15:00」「11/12(水)」）。
+ * @param {{ due?: string | null, dueTime?: string | null }} todo
+ * @param {string} [todayStr=formatLocalDate()]
+ * @returns {string}
+ */
+export function formatDueWithTime(todo, todayStr = formatLocalDate()) {
+  const label = formatDueLabel(todo?.due, todayStr);
+  return label && todo?.dueTime ? `${label} ${todo.dueTime}` : label;
+}
+
+/**
  * タスクの並び順グループ番号を返す。
  * 1: 期限切れ（due < 今日）
  * 2: 今日（today が true、または due が今日）
@@ -167,6 +178,15 @@ export function compareTodos(a, b, todayStr = formatLocalDate()) {
     if (dueA === null) return 1;
     if (dueB === null) return -1;
     return dueA < dueB ? -1 : 1;
+  }
+
+  // 同じ日なら時刻の早い順（時刻なしは後）
+  const timeA = a?.dueTime || null;
+  const timeB = b?.dueTime || null;
+  if (timeA !== timeB) {
+    if (timeA === null) return 1;
+    if (timeB === null) return -1;
+    return timeA < timeB ? -1 : 1;
   }
 
   const updatedA = a?.updatedAt || "";

@@ -7,6 +7,8 @@ struct Todo: Codable, Identifiable, Equatable {
     var done: Bool
     var today: Bool
     var due: String?
+    /// 期限の時刻（HH:MM）。期限の日があるときだけ使う
+    var dueTime: String?
     var tags: [String]
     var updatedAt: String
     /// 削除した日時。削除しても todos.json からは消さず、画面に出さないだけ
@@ -16,12 +18,14 @@ struct Todo: Codable, Identifiable, Equatable {
     var isActive: Bool { !done && deletedAt == nil }
 
     init(id: String, title: String, done: Bool = false, today: Bool = false,
-         due: String? = nil, tags: [String] = [], updatedAt: String, deletedAt: String? = nil) {
+         due: String? = nil, dueTime: String? = nil, tags: [String] = [], updatedAt: String,
+         deletedAt: String? = nil) {
         self.id = id
         self.title = title
         self.done = done
         self.today = today
         self.due = due
+        self.dueTime = dueTime
         self.tags = tags
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
@@ -35,6 +39,7 @@ struct Todo: Codable, Identifiable, Equatable {
         done = try c.decodeIfPresent(Bool.self, forKey: .done) ?? false
         today = try c.decodeIfPresent(Bool.self, forKey: .today) ?? false
         due = try c.decodeIfPresent(String.self, forKey: .due)
+        dueTime = try c.decodeIfPresent(String.self, forKey: .dueTime)
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
         deletedAt = try c.decodeIfPresent(String.self, forKey: .deletedAt)
@@ -103,6 +108,12 @@ enum TodoLogic {
                 guard let db = b.due else { return true }
                 return da < db
             }
+            // 同じ日なら時刻の早い順（時刻なしは後）
+            if a.dueTime != b.dueTime {
+                guard let ta = a.dueTime else { return false }
+                guard let tb = b.dueTime else { return true }
+                return ta < tb
+            }
             if a.updatedAt != b.updatedAt { return a.updatedAt > b.updatedAt }
             return a.id < b.id
         }
@@ -113,8 +124,14 @@ enum TodoLogic {
         return due < today
     }
 
-    /// 「今日」「明日」「11/12(水)」「期限切れ 11/8」
+    /// 「今日」「明日 15:00」「11/12(水)」「期限切れ 11/8(日)」
     static func dueLabel(_ todo: Todo, today: String = Clock.localDateString()) -> String? {
+        guard let label = dateLabel(todo, today: today) else { return nil }
+        if let time = todo.dueTime, !time.isEmpty { return "\(label) \(time)" }
+        return label
+    }
+
+    private static func dateLabel(_ todo: Todo, today: String) -> String? {
         guard let due = todo.due, let dueDate = Clock.parseLocalDate(due) else { return nil }
         if due == today { return "今日" }
         if let todayDate = Clock.parseLocalDate(today),
@@ -154,6 +171,9 @@ enum TodoJSON {
                 "\"today\": \(todo.today)",
                 "\"due\": \(todo.due.map(string) ?? "null")",
             ]
+            if let dueTime = todo.dueTime, todo.due != nil {
+                fields.append("\"dueTime\": \(string(dueTime))")
+            }
             if todo.tags.isEmpty {
                 fields.append("\"tags\": []")
             } else {
