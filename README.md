@@ -73,7 +73,7 @@ GitHub の **Settings → Developer settings → Personal access tokens → Fine
 4. **Scriptable アプリ内で一度スクリプトを実行**します。トークン入力ダイアログが出るので、②で作成した **Scriptable 用トークン（Read-only）** を入力して保存します（iOS の Keychain に `gh_todo_token` として安全に保存されます）。
 5. iPhone のホーム画面またはロック画面を長押しして Scriptable ウィジェットを追加し、ウィジェット設定で作成したスクリプトを選択します。
 
-ウィジェットは最短5分後の更新を要求します。実際の更新時刻は iOS が決めるため、アプリで保存しても即時には反映されません（[Scriptable 公式説明](https://docs.scriptable.app/listwidget/#refreshafterdate)）。
+ウィジェットは1分後以降の更新を要求します。実際の更新時刻は iOS が決めるため、1分ごとの更新やアプリで保存した直後の反映は保証されません（[Scriptable 公式説明](https://docs.scriptable.app/listwidget/#refreshafterdate)）。
 
 ---
 

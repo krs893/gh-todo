@@ -14,6 +14,7 @@ const APP_URL = "https://krs893.github.io/gh-todo/";
 
 const TOKEN_KEY = "gh_todo_token";
 const CACHE_FILENAME = "gh-todo-widget-cache.json";
+const REFRESH_INTERVAL_MS = 60 * 1000; // 1分後以降の更新を要求。実際の更新時刻は iOS が決める。
 const WEEKDAYS_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
 // --- 日付・並び替え（sync.js と同一規則） ---
@@ -238,7 +239,7 @@ async function fetchTodosWithCache(token) {
 function createTokenMissingWidget() {
   const widget = new ListWidget();
   widget.url = APP_URL;
-  widget.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
+  widget.refreshAfterDate = new Date(Date.now() + REFRESH_INTERVAL_MS);
   const text = widget.addText("Scriptableで一度実行してトークンを設定");
   text.font = Font.mediumSystemFont(13);
   text.textColor = Color.orange();
@@ -311,8 +312,14 @@ function populateHomeScreenWidget(
   const accentColor = Color.dynamic(new Color("#2563eb"), new Color("#60a5fa"));
   const dangerColor = Color.dynamic(new Color("#dc2626"), new Color("#f87171"));
 
+  const layout = family === "small"
+    ? { taskFont: 14, dueFont: 11, countFont: 12, rowSpacing: 5, maxItems: 3, titleLines: 1, padding: 12 }
+    : family === "medium"
+    ? { taskFont: 15, dueFont: 12, countFont: 13, rowSpacing: 4, maxItems: 4, titleLines: 1, padding: 12 }
+    : { taskFont: 18, dueFont: 14, countFont: 14, rowSpacing: 10, maxItems: 5, titleLines: 2, padding: 16 };
+
   widget.backgroundColor = bgColor;
-  widget.setPadding(12, 14, 12, 14);
+  widget.setPadding(layout.padding, 14, layout.padding, 14);
 
   // ヘッダー
   const headerRow = widget.addStack();
@@ -320,24 +327,23 @@ function populateHomeScreenWidget(
   headerRow.centerAlignContent();
 
   const titleText = headerRow.addText("Todo");
-  titleText.font = Font.boldSystemFont(13);
+  titleText.font = Font.boldSystemFont(16);
   titleText.textColor = accentColor;
 
   headerRow.addSpacer();
 
   const countText = headerRow.addText(`${activeTodos.length}件`);
-  countText.font = Font.semiboldSystemFont(11);
+  countText.font = Font.semiboldSystemFont(layout.countFont);
   countText.textColor = mutedColor;
 
-  widget.addSpacer(6);
+  widget.addSpacer(family === "small" ? 8 : 10);
 
-  const maxItems = family === "small" ? 3 : 5;
-  const displayTodos = activeTodos.slice(0, maxItems);
+  const displayTodos = activeTodos.slice(0, layout.maxItems);
 
   if (displayTodos.length === 0) {
     widget.addSpacer();
     const emptyText = widget.addText("未完了のタスクはありません");
-    emptyText.font = Font.systemFont(12);
+    emptyText.font = Font.systemFont(layout.taskFont);
     emptyText.textColor = mutedColor;
     widget.addSpacer();
   } else {
@@ -348,7 +354,7 @@ function populateHomeScreenWidget(
 
       const isOverdueItem = Boolean(todo.due && todo.due < todayStr);
       const bullet = row.addText(todo.today ? "★ " : "• ");
-      bullet.font = Font.boldSystemFont(12);
+      bullet.font = Font.boldSystemFont(layout.taskFont);
       bullet.textColor = isOverdueItem
         ? dangerColor
         : todo.today
@@ -356,16 +362,16 @@ function populateHomeScreenWidget(
         : mutedColor;
 
       const title = row.addText(todo.title);
-      title.font = Font.systemFont(12);
+      title.font = Font.systemFont(layout.taskFont);
       title.textColor = textColor;
-      title.lineLimit = 1;
+      title.lineLimit = layout.titleLines;
 
       row.addSpacer(4);
 
       const dueLabel = formatDueLabel(todo.due, todayStr);
       if (dueLabel) {
         const dueText = row.addText(dueLabel);
-        dueText.font = Font.semiboldSystemFont(10);
+        dueText.font = Font.semiboldSystemFont(layout.dueFont);
         dueText.textColor = isOverdueItem
           ? dangerColor
           : todo.due === todayStr
@@ -373,7 +379,7 @@ function populateHomeScreenWidget(
           : mutedColor;
       }
 
-      widget.addSpacer(4);
+      widget.addSpacer(layout.rowSpacing);
     }
     widget.addSpacer();
   }
@@ -391,7 +397,7 @@ function populateHomeScreenWidget(
     : "";
 
   const footerText = footerRow.addText(statusStr);
-  footerText.font = Font.systemFont(10);
+  footerText.font = Font.systemFont(12);
   footerText.textColor = failed ? dangerColor : mutedColor;
 }
 
@@ -417,7 +423,7 @@ async function run() {
 
   const widget = new ListWidget();
   widget.url = APP_URL;
-  widget.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
+  widget.refreshAfterDate = new Date(Date.now() + REFRESH_INTERVAL_MS);
 
   const family = config.widgetFamily || "medium";
   if (
